@@ -1,11 +1,21 @@
 import os
-from time import time
+import sys  # 🛠️ IMPORTANTE: Adicionado para rastrear o caminho do executável
 import requests
+import time
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-# Carrega as variáveis de ambiente do arquivo .env
-load_dotenv()
+# 🛠️ CORREÇÃO DE CAMINHO ABSOLUTO PARA O PYINSTALLER
+if getattr(sys, 'frozen', False):
+    # Se estiver rodando como um arquivo .exe compilado
+    pasta_principal = os.path.dirname(sys.executable)
+else:
+    # Se estiver rodando como um script .py normal
+    pasta_principal = os.path.dirname(os.path.abspath(__file__))
+
+# Força o load_dotenv a ler o arquivo exatamente ao lado do executável
+caminho_do_env = os.path.join(pasta_principal, '.env')
+load_dotenv(caminho_do_env)
 
 # Configurações do Voo
 ORIGEM = "POA"  # Porto Alegre
@@ -28,36 +38,32 @@ def buscar_preco_atual():
     url = "https://serpapi.com/search"
     api_key = os.getenv("SERPAPI_KEY")
     
-    # --- CONSULTA 1: TRECHO DE IDA (ONE-WAY) ---
     params_ida = {
         "engine": "google_flights",
         "departure_id": ORIGEM,
         "arrival_id": DESTINO,
         "outbound_date": DATA_IDA,
-        "type": "2",  # Força busca de "Somente Ida"
+        "type": "2",  
         "adults": 1, 
         "currency": "BRL",
         "api_key": api_key
     }
     
-    # --- CONSULTA 2: TRECHO DE VOLTA (ONE-WAY) ---
     params_volta = {
         "engine": "google_flights",
         "departure_id": DESTINO,
         "arrival_id": ORIGEM,
         "outbound_date": DATA_VOLTA,
-        "type": "2",  # Força busca de "Somente Volta"
+        "type": "2",  
         "adults": 1, 
         "currency": "BRL",
         "api_key": api_key
     }
     
     try:
-        # Executa busca da Ida
         res_ida = requests.get(url, params=params_ida).json()
         opcoes_ida = res_ida.get("best_flights", []) + res_ida.get("other_flights", [])
         
-        # Executa busca da Volta
         res_volta = requests.get(url, params=params_volta).json()
         opcoes_volta = res_volta.get("best_flights", []) + res_volta.get("other_flights", [])
         
@@ -65,7 +71,6 @@ def buscar_preco_atual():
             print("Não foi possível encontrar voos em um dos trechos.")
             return None
 
-        # Filtragem do melhor voo de Ida
         melhor_ida = None
         for voo in opcoes_ida:
             segmentos = voo.get("flights", [])
@@ -79,7 +84,6 @@ def buscar_preco_atual():
             melhor_ida = voo
             break
 
-        # Filtragem do melhor voo de Volta
         melhor_volta = None
         for voo in opcoes_volta:
             segmentos = voo.get("flights", [])
@@ -97,7 +101,6 @@ def buscar_preco_atual():
             print(f"Filtros incompatíveis com as opções reais: Ida={PRIORIZAR_IDA} | Volta={PRIORIZAR_VOLTA}")
             return None
 
-        # Dados estruturados da Ida
         segmentos_ida = melhor_ida["flights"]
         saida_ida = segmentos_ida[0]
         chegada_ida = segmentos_ida[-1]
@@ -106,7 +109,6 @@ def buscar_preco_atual():
         passa_por_buenos_aires = any(ap in escalas_ida for ap in ["AEP", "EZE", "BUE"])
         texto_conexoes_ida = ", ".join(escalas_ida) if escalas_ida else "Voo Direto"
 
-        # Dados estruturados da Volta
         segmentos_volta = melhor_volta["flights"]
         saida_volta = segmentos_volta[0]
         chegada_volta = segmentos_volta[-1]
@@ -114,11 +116,8 @@ def buscar_preco_atual():
         escalas_volta = [v["arrival_airport"]["id"].upper() for v in segmentos_volta[:-1]]
         texto_conexoes_volta = ", ".join(escalas_volta) if escalas_volta else "Voo Direto"
 
-        # Preço unificado dos dois bilhetes individuais
         preco_combinado = float(melhor_ida["price"]) + float(melhor_volta["price"])
-        
-        # Links de navegação direta
-        link_ida = res_ida.get("search_metadata", {}).get("google_flights_url", "https://www.google.com/travel/flights")
+        link_ida = res_ida.get("search_metadata", {}).get("google_flights_url", "http://google.com/travel/flights")
 
         return {
             "origem": ORIGEM,
@@ -138,7 +137,7 @@ def buscar_preco_atual():
             "horario_saida_ida": saida_ida["departure_airport"]["time"],
             "duracao_ida": f"{duracao_ida} minutos",
             "horario_chegada_ida": chegada_ida["arrival_airport"]["time"],
-            "aeroporto_destino_ida": chegada_ida["arrival_airport"]["name"],
+            "aeroporto_destino_ida":  chegada_ida["arrival_airport"]["name"],
             "cidade_destino_ida": "Santiago",
             "pais_destino_ida": "Chile",
 
@@ -149,7 +148,7 @@ def buscar_preco_atual():
             "horario_saida_volta": saida_volta["departure_airport"]["time"],
             "duracao_volta": f"{duracao_volta} minutos",
             "horario_chegada_volta": chegada_volta["arrival_airport"]["time"],
-            "aeroporto_destino_volta": chegada_volta["arrival_airport"]["name"],
+            "aeroporto_destino_volta":  chegada_volta["arrival_airport"]["name"],
             "cidade_destino_volta": "Porto Alegre",
             "pais_destino_volta": "Brasil"
         }
@@ -248,27 +247,26 @@ def monitorar():
         msg = (
             f"🚨 META DE PREÇO ALCANÇADA!\n\n"
             f"{status}\n\n"
-            f"Preço por pessoa (Ida+Volta): R$ {voo_atual['preco']:.2f}\n"
+            f"Preço por pessoa (Ida+Volta): R$ {voo_atual['preco']:.2f}\n\n"
             f"💰 TOTAL GRUPO ({ADULTOS_PARA_CALCULO} paxs): R$ {preco_total_grupo:.2f}\n"
             f"Companhia principal: {voo_atual['companhia']}\n\n"
             f"{bloco_itinerario}"
         )
     else:
         msg = (
-            f"📋 RELATÓRIO DIÁRIO DE PASSAGENS\n\n"
+            f"📋 NOTIFICAÇÃO DE PASSAGENS\n\n"
             f"Nenhuma combinação atingiu a meta estipulada.\n"
-            f"Preço atual por pessoa (Ida+Volta): R$ {voo_atual['preco']:.2f}\n"
+            f"Preço atual por pessoa (Ida+Volta): R$ {voo_atual['preco']:.2f}\n\n"
             f"💰 Total estimado para o grupo: R$ {preco_total_grupo:.2f}\n"
             f"Companhia: {voo_atual['companhia']}\n\n"
             f"{bloco_itinerario}"
         )
 
     enviar_telegram(msg)
-    print("Relatório enviado para o Telegram.")
+    print("Notificação enviada para o Telegram.")
 
-if __name__ == "busca_passagens":    
+if __name__ == "__main__":    
     print("🤖 Monitor de passagens iniciado com sucesso!")
-    print("📢 A procurar voos agora e a cada 4 horas... Pode fechar esta janela após o empacotamento.")
     
     while True:
         try:
@@ -276,5 +274,4 @@ if __name__ == "busca_passagens":
         except Exception as e:
             print(f"Erro crítico no loop de monitoramento: {e}")
         
-        # 4 horas em segundos = 4 * 60 * 60 = 14400
-        time.sleep(14400)
+        time.sleep(14400)  # Dorme por 4 horas
