@@ -1,0 +1,24 @@
+# senhas e credenciais
+.env
+*.env
+
+# Lixo de compilação do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos gerados pelo PyInstaller na hora de empacotar o executável
+build/
+dist/
+*.spec
+
+# Pastas de ambientes virtuais (se você usar)
+.venv/
+venv/
+env/
+
+# Arquivos do sistema operacional e do editor de código
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
